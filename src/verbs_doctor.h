@@ -573,7 +573,11 @@ int runDoctor( const rw::Config& cfg, const char* argv0 )
     // `which ripwire`'s) ----
     {
         const std::string selfPath  = selfExecutablePath( argv0 );
+#if defined(_WIN32)
+        const std::string whichPath = doctorPopenTrim( "where ripwire.exe 2>NUL" );
+#else
         const std::string whichPath = doctorPopenTrim( "which ripwire 2>/dev/null" );
+#endif
         struct stat        selfSt {};
         struct stat         whichSt {};
         const bool haveSelf  = !selfPath.empty()  && ::stat( selfPath.c_str(),  &selfSt )  == 0;

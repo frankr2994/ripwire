@@ -490,8 +490,13 @@ inline void streamBlobs( const std::string& root, const std::vector<std::string>
         std::fclose( lf );
     }
 
+#ifdef _WIN32
+    const std::string cmd = "git -c core.quotepath=false -C " + shSingleQuote( root )
+                          + " cat-file --batch < " + rw_short_path( listPath ) + " 2>/dev/null";
+#else
     const std::string cmd = "git -c core.quotepath=false -C " + shSingleQuote( root )
                           + " cat-file --batch < " + shSingleQuote( listPath ) + " 2>/dev/null";
+#endif
     std::FILE* pipe = popen( cmd.c_str(), "r" );
     if( !pipe )
     {
@@ -690,7 +695,11 @@ struct RefInfo
 inline std::vector<RefInfo> enumerateRefs( const std::string& root, std::string_view filter, const std::string& headSha,
                                            std::size_t* filterNameHits = nullptr )
 {
+#ifdef _WIN32
+    const std::string raw = gitCapture( root, "for-each-ref --sort=refname --format=\"%(refname:short)|%(objectname)|%(committerdate:short)\" refs/heads 2>/dev/null" );
+#else
     const std::string raw = gitCapture( root, "for-each-ref --sort=refname --format='%(refname:short)|%(objectname)|%(committerdate:short)' refs/heads 2>/dev/null" );
+#endif
     std::vector<RefInfo> out;
     for( std::string_view line : splitLines( raw ) )
     {

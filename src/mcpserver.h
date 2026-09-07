@@ -115,9 +115,17 @@ inline bool sendAll( int fd, const std::string& data ) noexcept
     std::size_t sent = 0;
     while( sent < data.size() )
     {
-        const ssize_t n = ::send( fd, data.data() + sent, data.size() - sent, 0 );
+        const int toSend = static_cast<int>( std::min<std::size_t>( data.size() - sent, 32768 ) );
+        const ssize_t n = ::send( static_cast<SOCKET>( fd ), data.data() + sent, toSend, 0 );
         if( n <= 0 )
         {
+            std::fprintf( stderr, "ripwire-mcp: send failed n=%zd err=%d\n", n,
+#ifdef _WIN32
+                          WSAGetLastError()
+#else
+                          errno
+#endif
+            );
             return false;
         }
         sent += static_cast<std::size_t>( n );

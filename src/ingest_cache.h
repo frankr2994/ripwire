@@ -879,6 +879,7 @@ struct ReadFd
     ReadFd& operator=( const ReadFd& ) = delete;
     ReadFd( ReadFd&& other ) noexcept : fd( other.fd ) { other.fd = -1; }
     ~ReadFd() { if( fd >= 0 ) { ::close( fd ); } }
+    void close() noexcept { if( fd >= 0 ) { ::close( fd ); fd = -1; } }
 
     // openOnce, not a move-assignment: the only mutation this type needs is "fill an empty guard", and
     // a move-assign operator here would be a byte-for-byte clone of ingest_sidecap.h's TreeGuard one
@@ -943,6 +944,7 @@ struct CacheFrame
     long long               mtimeNs     = -1;// the blob's own mtime — the warm-run racy-rule reference
     bool                    ok          = false;
     CacheReject             reason      = CacheReject::Absent;   // meaningful only while ok == false
+    void close() noexcept { blob.close(); }
 };
 
 // pread the whole of [ off, off+n ) into `dst`. Short reads are retried (a pread on a regular file can
@@ -2138,6 +2140,7 @@ inline void saveCache( const std::string& path, std::string_view rootDir, const 
         PROFILE_SCOPE_DESCRIBE( "ingest/saveCache: offset table + trailer" );
         finishCacheBlob( w, table );
     }
+    const_cast<CacheFrame&>( prev ).close();
     PROFILE_SCOPE_DESCRIBE( "ingest/saveCache: write + rename" );
 
     // unique per-process temp so two concurrent runs (this repo runs ~20 parallel sessions) don't
@@ -2165,12 +2168,21 @@ inline void saveCache( const std::string& path, std::string_view rootDir, const 
         DEGRADED_PATH_ALERT( "ingest: saveCache write failed (short write or fclose error) — old cache preserved" );
         return;
     }
+#if defined(_WIN32)
+    if( !MoveFileExA( tmp.c_str(), path.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_COPY_ALLOWED ) )
+    {
+        std::remove( tmp.c_str() );
+        DEGRADED_PATH_ALERT( "ingest: saveCache rename(tmp -> cache) failed — old cache preserved" );
+        return;
+    }
+#else
     if( std::rename( tmp.c_str(), path.c_str() ) != 0 )
     {
         std::remove( tmp.c_str() );   // clean up on failure
         DEGRADED_PATH_ALERT( "ingest: saveCache rename(tmp -> cache) failed — old cache preserved" );
         return;
     }
+#endif
 
     // A5 (cache-dir hygiene): --doctor measured ~11,914 ripwire-* blobs / 2.4 GB accumulating in the cache-ladder
     // dir because only the qsnap/qheadsnap families ever evicted — this main parse-cache family (this very

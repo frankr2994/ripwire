@@ -289,6 +289,38 @@ jobs:
       - name: G4 — xmllint --noout
         run: ./build/ripwire test/fixture --no-cache | xmllint --noout -
 
+  # ─── windows: native Windows validation with MSVC ABI + Clang ────────────────────────────────────────
+  windows:
+    name: windows (windows-latest, clang)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure (portable — clang + ninja)
+        run: cmake -S . -B build -G Ninja -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++
+
+      - name: Build
+        run: cmake --build build -j --target ripwire
+
+      - name: Doctor check
+        run: .\build\ripwire.exe . --doctor
+
+      - name: Self-run on the fixture
+        run: .\build\ripwire.exe test/fixture --no-cache
+
+      - name: det-gate — 2-run byte-identical diff
+        shell: bash
+        run: |
+          ./build/ripwire.exe test/fixture --no-cache > run_a.xml
+          ./build/ripwire.exe test/fixture --no-cache > run_b.xml
+          diff -q run_a.xml run_b.xml
+
+      - name: Determinism gate (test/det-gate.sh)
+        shell: bash
+        run: bash test/det-gate.sh build/ripwire.exe
+
   asan:
     name: asan (${{ matrix.os }})
     strategy:

@@ -34,7 +34,10 @@ if(APPLE AND NOT RIPWIRE_PRETEND_LINUX AND CMAKE_SYSTEM_PROCESSOR MATCHES "^(arm
   set(RIPWIRE_IS_APPLE_SILICON ON)
 endif()
 
-if(RIPWIRE_NATIVE)
+if(MSVC)
+  # MSVC compiler flags: fast math, conformant C++ mode, UTF-8 source/exec charset
+  set(RIPWIRE_ARCH_FLAGS /O2 /fp:fast /permissive- /utf-8)
+elseif(RIPWIRE_NATIVE)
   set(RIPWIRE_ARCH_FLAGS -O3 -march=native -ffast-math -fno-finite-math-only)
 elseif(RIPWIRE_IS_APPLE_SILICON)
   set(RIPWIRE_ARCH_FLAGS -O2 -mcpu=apple-m1 -ffast-math -fno-finite-math-only)

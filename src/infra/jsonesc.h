@@ -267,6 +267,19 @@ inline bool isJsonWs( char c ) noexcept
 // forwards here instead of carrying its own copy.
 inline std::string shSingleQuote( const std::string& s )
 {
+#if defined(_WIN32)
+    std::string out = "\"";
+    for( char c : s )
+    {
+        if( c == '"' ) { out += "\\\""; }
+        else
+        {
+            out += c;
+        }
+    }
+    out += "\"";
+    return out;
+#else
     std::string out = "'";
     for( char c : s )
     {
@@ -278,6 +291,7 @@ inline std::string shSingleQuote( const std::string& s )
     }
     out += "'";
     return out;
+#endif
 }
 
 }   // namespace rw

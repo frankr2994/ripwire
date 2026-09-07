@@ -967,6 +967,37 @@ inline ContentIdIndex contentIdsBySym( const IngestResult& ing, const Graph& g, 
 // unrelated agent-session files. Returns the dir with NO trailing slash. Deterministic per (user, env).
 inline std::string cacheDirLadder()
 {
+#if defined(_WIN32)
+    std::string d;
+    const char* localAppData = std::getenv( "LOCALAPPDATA" );
+    const char* tempDir = std::getenv( "TEMP" );
+    if( !tempDir ) tempDir = std::getenv( "TMP" );
+
+    if( localAppData && *localAppData )
+    {
+        d = localAppData;
+    }
+    else if( tempDir && *tempDir )
+    {
+        d = tempDir;
+    }
+    else
+    {
+        d = "C:/Windows/Temp";
+    }
+    while( d.size() > 1 && ( d.back() == '/' || d.back() == '\\' ) )
+    {
+        d.pop_back();
+    }
+    d += "/ripwire";
+    ::mkdir( d.c_str(), 0700 );
+    struct stat st {};
+    if( ::stat( d.c_str(), &st ) == 0 && S_ISDIR( st.st_mode ) )
+    {
+        return d;
+    }
+    return "NUL";
+#else
     std::string d;
     const char* tmpDir = std::getenv( "TMPDIR" );
     if( tmpDir && *tmpDir )
@@ -999,6 +1030,7 @@ inline std::string cacheDirLadder()
         }
     }
     return "/dev/null/ripwire-cache-unavailable";   // unsafe/unusable candidate: make cache I/O fail closed
+#endif
 }
 
 // popen a shell command and return its trimmed stdout ("" on any failure — never crashes). THE one copy of
