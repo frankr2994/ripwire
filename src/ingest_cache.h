@@ -1968,7 +1968,7 @@ inline void saveCache( const std::string& path, std::string_view rootDir, const 
     // validate — absent, foreign version/parserVer/arch, torn — CARRY is simply empty and this run
     // writes its own file set, which is exactly v14's behaviour and self-heals on the next wider run.
     const CachePathKeys              keys  = buildCachePathKeys( files, rootDir );
-    const CacheFrame                 prev  = openCacheFrame( path, captureValueUses );
+    CacheFrame                       prev  = openCacheFrame( path, captureValueUses );
     std::vector<CacheEntry>          carry;
     const std::vector<CacheWriteRow> plan  = buildCacheWritePlan( keys.order, keys.pathHashes, prev.entries, carry );
 
@@ -2140,7 +2140,7 @@ inline void saveCache( const std::string& path, std::string_view rootDir, const 
         PROFILE_SCOPE_DESCRIBE( "ingest/saveCache: offset table + trailer" );
         finishCacheBlob( w, table );
     }
-    const_cast<CacheFrame&>( prev ).close();
+    prev.close();
     PROFILE_SCOPE_DESCRIBE( "ingest/saveCache: write + rename" );
 
     // unique per-process temp so two concurrent runs (this repo runs ~20 parallel sessions) don't

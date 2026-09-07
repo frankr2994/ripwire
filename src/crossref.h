@@ -696,7 +696,7 @@ inline std::vector<RefInfo> enumerateRefs( const std::string& root, std::string_
                                            std::size_t* filterNameHits = nullptr )
 {
 #ifdef _WIN32
-    const std::string raw = gitCapture( root, "for-each-ref --sort=refname --format=\"%(refname:short)|%(objectname)|%(committerdate:short)\" refs/heads 2>/dev/null" );
+    const std::string raw = gitCapture( root, "for-each-ref --sort=refname --format=^%(refname:short^)^|^%(objectname^)^|^%(committerdate:short^) refs/heads 2>/dev/null" );
 #else
     const std::string raw = gitCapture( root, "for-each-ref --sort=refname --format='%(refname:short)|%(objectname)|%(committerdate:short)' refs/heads 2>/dev/null" );
 #endif

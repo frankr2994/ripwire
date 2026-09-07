@@ -268,10 +268,20 @@ inline bool isJsonWs( char c ) noexcept
 inline std::string shSingleQuote( const std::string& s )
 {
 #if defined(_WIN32)
+    // On Windows, cmd.exe /c expands %VAR% inside double quotes (e.g. C:\src\100%repo%).
+    // Closing the quote, escaping % as ^%, and reopening the quote ("foo"^%"bar") prevents cmd.exe
+    // from expanding the variable, while CommandLineToArgvW joins the segments into foo%bar.
     std::string out = "\"";
     for( char c : s )
     {
-        if( c == '"' ) { out += "\\\""; }
+        if( c == '"' )
+        {
+            out += "\\\"";
+        }
+        else if( c == '%' )
+        {
+            out += "\"^%\"";
+        }
         else
         {
             out += c;

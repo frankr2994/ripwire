@@ -336,7 +336,11 @@ int rw_fflush( std::FILE* stream )
     if( it != s_memstreams.end() )
     {
         auto& info = it->second;
-        ::fflush( stream );
+        const int flushRes = ::fflush( stream );
+        if( flushRes != 0 )
+        {
+            return flushRes;
+        }
         long currentPos = std::ftell( stream );
         std::fseek( stream, 0, SEEK_END );
         long len = std::ftell( stream );
@@ -386,7 +390,12 @@ int rw_fclose( std::FILE* stream )
 
     if( isMem )
     {
-        ::fflush( stream );
+        const int flushRes = ::fflush( stream );
+        if( flushRes != 0 )
+        {
+            ::fclose( stream );
+            return flushRes;
+        }
         std::fseek( stream, 0, SEEK_END );
         long len = std::ftell( stream );
         if( len < 0 )
@@ -419,18 +428,7 @@ int rw_close( int fd )
     {
         return -1;
     }
-    if( closesocket( static_cast<SOCKET>( fd ) ) == 0 )
-    {
-        return 0;
-    }
-    if( WSAGetLastError() == WSAENOTSOCK )
-    {
-        if( _get_osfhandle( fd ) != -1 )
-        {
-            return _close( fd );
-        }
-    }
-    return -1;
+    return _close( fd );
 }
 
 struct WinsockAutoInit

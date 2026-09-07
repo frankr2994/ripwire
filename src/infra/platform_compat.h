@@ -203,17 +203,25 @@
       return _commit( fd );
   }
 
+  using socket_t = SOCKET;
+  #define RW_INVALID_SOCKET INVALID_SOCKET
+
+  inline int rw_closesocket( SOCKET s ) noexcept
+  {
+      return ::closesocket( s );
+  }
+
   namespace rw::compat
   {
-      inline int rw_setsockopt( int s, int level, int optname, const void* optval, int optlen )
+      inline int rw_setsockopt( SOCKET s, int level, int optname, const void* optval, int optlen )
       {
           if( level == SOL_SOCKET && optname == SO_RCVTIMEO && optlen == sizeof( timeval ) )
           {
               const auto* tv = static_cast<const timeval*>( optval );
               DWORD ms = static_cast<DWORD>( tv->tv_sec * 1000 + tv->tv_usec / 1000 );
-              return ::setsockopt( static_cast<SOCKET>( s ), level, optname, reinterpret_cast<const char*>( &ms ), sizeof( ms ) );
+              return ::setsockopt( s, level, optname, reinterpret_cast<const char*>( &ms ), sizeof( ms ) );
           }
-          return ::setsockopt( static_cast<SOCKET>( s ), level, optname, static_cast<const char*>( optval ), optlen );
+          return ::setsockopt( s, level, optname, static_cast<const char*>( optval ), optlen );
       }
   }
 
@@ -226,7 +234,7 @@
   #include <format>
   namespace std
   {
-  #if defined(_MSC_VER) && !defined(__cpp_lib_format_ranges)
+  #if defined(_MSC_VER) && ( !defined(__cpp_lib_format) || __cpp_lib_format < 202207L )
       template <class... _Args>
       using format_string = _Fmt_string<_Args...>;
   #endif
@@ -277,6 +285,13 @@
       {
           return {};
       }
+  }
+
+  using socket_t = int;
+  #define RW_INVALID_SOCKET ( -1 )
+  inline int rw_closesocket( int s ) noexcept
+  {
+      return ::close( s );
   }
   #endif
 

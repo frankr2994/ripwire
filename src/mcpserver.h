@@ -110,13 +110,13 @@ inline std::string_view trim( std::string_view s ) noexcept
 }
 
 // send an entire buffer, tolerating short writes; false if the peer went away mid-write (we just drop it).
-inline bool sendAll( int fd, const std::string& data ) noexcept
+inline bool sendAll( socket_t fd, const std::string& data ) noexcept
 {
     std::size_t sent = 0;
     while( sent < data.size() )
     {
         const int toSend = static_cast<int>( std::min<std::size_t>( data.size() - sent, 32768 ) );
-        const ssize_t n = ::send( static_cast<SOCKET>( fd ), data.data() + sent, toSend, 0 );
+        const ssize_t n = ::send( fd, data.data() + sent, toSend, 0 );
         if( n <= 0 )
         {
             std::fprintf( stderr, "ripwire-mcp: send failed n=%zd err=%d\n", n,
@@ -134,7 +134,7 @@ inline bool sendAll( int fd, const std::string& data ) noexcept
 }
 
 // build + send a minimal HTTP/1.1 response. Connection: close — one request per connection (§2b serialize).
-inline void respond( int fd, const char* status, const char* contentType, const std::string& body ) noexcept
+inline void respond( socket_t fd, const char* status, const char* contentType, const std::string& body ) noexcept
 {
     std::string out;
     out.reserve( body.size() + 160 );
@@ -184,7 +184,7 @@ struct Request
 // makes recv() return <= 0 → we abandon the connection (server lives).
 //
 // `tooManyHeaderBytes` / `tooLargeBody` out-params let the caller pick the right 4xx without a wider enum.
-inline Request readRequest( int fd, bool& tooManyHeaderBytes, bool& tooLargeBody )
+inline Request readRequest( socket_t fd, bool& tooManyHeaderBytes, bool& tooLargeBody )
 {
     tooManyHeaderBytes = false;
     tooLargeBody       = false;
@@ -516,8 +516,8 @@ inline int runMcpHttp( const McpHttpConfig& cfg )
                               && !gitRepoToplevel( pinnedRoot ).empty();
 
     // ── 4) open the listening socket ───────────────────────────────────────────────────────────────────
-    const int listenFd = ::socket( AF_INET, SOCK_STREAM, 0 );
-    if( listenFd < 0 ) { std::fprintf( stderr, "ripwire: --listen: socket() failed: %s\n", std::strerror( errno ) ); return 1; }
+    const socket_t listenFd = ::socket( AF_INET, SOCK_STREAM, 0 );
+    if( listenFd == RW_INVALID_SOCKET ) { std::fprintf( stderr, "ripwire: --listen: socket() failed: %s\n", std::strerror( errno ) ); return 1; }
     int one = 1;
     ::setsockopt( listenFd, SOL_SOCKET, SO_REUSEADDR, &one, sizeof( one ) );
 
@@ -528,19 +528,19 @@ inline int runMcpHttp( const McpHttpConfig& cfg )
     if( ::inet_pton( AF_INET, bindHost.c_str(), &addr.sin_addr ) != 1 )
     {
         std::fprintf( stderr, "ripwire: --listen: '%s' is not a valid IPv4 bind address (IPv6 is not supported; reverse-proxy for that)\n", host.c_str() );
-        ::close( listenFd );
+        rw_closesocket( listenFd );
         return 1;
     }
     if( ::bind( listenFd, reinterpret_cast<sockaddr*>( &addr ), sizeof( addr ) ) != 0 )
     {
         std::fprintf( stderr, "ripwire: --listen: bind %s:%d failed: %s\n", host.c_str(), port, std::strerror( errno ) );
-        ::close( listenFd );
+        rw_closesocket( listenFd );
         return 1;
     }
     if( ::listen( listenFd, 16 ) != 0 )
     {
         std::fprintf( stderr, "ripwire: --listen: listen() failed: %s\n", std::strerror( errno ) );
-        ::close( listenFd );
+        rw_closesocket( listenFd );
         return 1;
     }
 
@@ -577,8 +577,8 @@ inline int runMcpHttp( const McpHttpConfig& cfg )
     // ── 6) accept loop: single-threaded, one request per connection (Connection: close) — §2b serialize ─
     for( ;; )
     {
-        const int fd = ::accept( listenFd, nullptr, nullptr );
-        if( fd < 0 )
+        const socket_t fd = ::accept( listenFd, nullptr, nullptr );
+        if( fd == RW_INVALID_SOCKET )
         {
             if( errno == EINTR )
             {
@@ -678,11 +678,11 @@ inline int runMcpHttp( const McpHttpConfig& cfg )
             }
         }
 
-        ::close( fd );
+        rw_closesocket( fd );
     }
 
     // unreachable (the accept loop runs until the process is signalled) — kept for symmetry / future signal handling.
-    ::close( listenFd );
+    rw_closesocket( listenFd );
     return 0;
 }
 

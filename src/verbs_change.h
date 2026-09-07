@@ -807,8 +807,14 @@ RunCapture runCommandCapture( const std::string& cmd, std::uint32_t timeoutSec )
     si.hStdOutput = hWrite;
     si.hStdError = hWrite;
 
+    char sysDir[ MAX_PATH ];
+    const UINT sysDirLen = GetSystemDirectoryA( sysDir, MAX_PATH );
+    const std::string cmdExePath = ( sysDirLen > 0 && sysDirLen < MAX_PATH )
+                                       ? std::string( sysDir ) + "\\cmd.exe"
+                                       : "C:\\Windows\\System32\\cmd.exe";
+
     PROCESS_INFORMATION pi{};
-    std::string fullCmd = "cmd.exe /d /c " + cmd;
+    std::string fullCmd = "\"" + cmdExePath + "\" /d /c " + cmd;
     std::vector<char> cmdBuf( fullCmd.begin(), fullCmd.end() );
     cmdBuf.push_back( '\0' );
 
@@ -817,7 +823,7 @@ RunCapture runCommandCapture( const std::string& cmd, std::uint32_t timeoutSec )
     { return std::chrono::duration_cast<std::chrono::milliseconds>( std::chrono::steady_clock::now() - t0 ).count(); };
 
     BOOL ok = CreateProcessA(
-        NULL,
+        cmdExePath.c_str(),
         cmdBuf.data(),
         NULL,
         NULL,

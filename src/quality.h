@@ -38,6 +38,11 @@
 #include <cerrno>      // EWOULDBLOCK — the LOCK_NB retry predicate
 #include <ctime>       // ::nanosleep — the lock's bounded 10 ms poll
 
+#if defined(_WIN32)
+#include <aclapi.h>
+#include <sddl.h>
+#endif
+
 #include <algorithm>
 #include <atomic>       // Phase-M: the tmp-name sequence counter (atomicWriteFile); also the A5 process-once cache-sweep guard
 #include <cctype>       // std::isxdigit/std::isdigit — B10.2d churn-blame porcelain parsing
@@ -990,9 +995,85 @@ inline std::string cacheDirLadder()
         d.pop_back();
     }
     d += "/ripwire";
-    ::mkdir( d.c_str(), 0700 );
-    struct stat st {};
-    if( ::stat( d.c_str(), &st ) == 0 && S_ISDIR( st.st_mode ) )
+
+    SECURITY_ATTRIBUTES sa{};
+    sa.nLength = sizeof( sa );
+    sa.bInheritHandle = FALSE;
+    PSECURITY_DESCRIPTOR pSD = nullptr;
+    if( ConvertStringSecurityDescriptorToSecurityDescriptorA(
+            "D:P(A;OICI;GA;;;OW)(A;OICI;GA;;;BA)",
+            SDDL_REVISION_1,
+            &pSD,
+            nullptr ) )
+    {
+        sa.lpSecurityDescriptor = pSD;
+    }
+
+    CreateDirectoryA( d.c_str(), pSD ? &sa : nullptr );
+    if( pSD )
+    {
+        LocalFree( pSD );
+    }
+
+    const DWORD attrs = GetFileAttributesA( d.c_str() );
+    if( attrs == INVALID_FILE_ATTRIBUTES || !( attrs & FILE_ATTRIBUTE_DIRECTORY ) )
+    {
+        return "NUL";
+    }
+
+    HANDLE hToken = NULL;
+    if( !OpenProcessToken( GetCurrentProcess(), TOKEN_QUERY, &hToken ) )
+    {
+        return "NUL";
+    }
+
+    BYTE tokenBuf[ 256 ];
+    DWORD tokenLen = 0;
+    GetTokenInformation( hToken, TokenUser, tokenBuf, sizeof( tokenBuf ), &tokenLen );
+    const TOKEN_USER* pTokenUser = reinterpret_cast<const TOKEN_USER*>( tokenBuf );
+    const PSID userSid = pTokenUser ? pTokenUser->User.Sid : nullptr;
+
+    PSID pSidOwner = nullptr;
+    PSECURITY_DESCRIPTOR pSDGet = nullptr;
+    const DWORD res = GetNamedSecurityInfoA(
+        d.c_str(),
+        SE_FILE_OBJECT,
+        OWNER_SECURITY_INFORMATION,
+        &pSidOwner,
+        nullptr,
+        nullptr,
+        nullptr,
+        &pSDGet );
+
+    bool ownerMatch = false;
+    if( res == ERROR_SUCCESS && pSidOwner && userSid )
+    {
+        if( EqualSid( pSidOwner, userSid ) )
+        {
+            ownerMatch = true;
+        }
+        else
+        {
+            SID_IDENTIFIER_AUTHORITY ntAuth = SECURITY_NT_AUTHORITY;
+            PSID adminSid = nullptr;
+            if( AllocateAndInitializeSid( &ntAuth, 2, SECURITY_BUILTIN_DOMAIN_RID, DOMAIN_ALIAS_RID_ADMINS, 0, 0, 0, 0, 0, 0, &adminSid ) )
+            {
+                if( EqualSid( pSidOwner, adminSid ) )
+                {
+                    ownerMatch = true;
+                }
+                FreeSid( adminSid );
+            }
+        }
+    }
+
+    if( pSDGet )
+    {
+        LocalFree( pSDGet );
+    }
+    CloseHandle( hToken );
+
+    if( ownerMatch )
     {
         return d;
     }
