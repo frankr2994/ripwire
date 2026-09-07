@@ -1009,11 +1009,13 @@ inline std::string cacheDirLadder()
         sa.lpSecurityDescriptor = pSD;
     }
 
-    CreateDirectoryA( d.c_str(), pSD ? &sa : nullptr );
-    if( pSD )
+    if( !pSD )
     {
-        LocalFree( pSD );
+        return "NUL";
     }
+
+    CreateDirectoryA( d.c_str(), &sa );
+    LocalFree( pSD );
 
     const DWORD attrs = GetFileAttributesA( d.c_str() );
     if( attrs == INVALID_FILE_ATTRIBUTES || !( attrs & FILE_ATTRIBUTE_DIRECTORY ) )
