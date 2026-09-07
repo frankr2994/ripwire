@@ -460,6 +460,7 @@ struct StreamBlobStats
     }
 };
 
+/// Streams requested git objects in one framed batch while bounding buffered blob memory.
 template<class OnBlob>
 inline void streamBlobs( const std::string& root, const std::vector<std::string>& shas, OnBlob onBlob,
                          StreamBlobStats* stats = nullptr )
@@ -692,6 +693,7 @@ struct RefInfo
 // out.size(): a filter matching only the checked-out branch has SELECTED something (the answer is "nothing
 // but the ref you are on"), while a filter matching no branch name at all has selected nothing and must
 // refuse rather than report refs="0" — which reads as "no branch carries stray work".
+/// Enumerates local branches in deterministic order and excludes the checked-out ref from stray-content results.
 inline std::vector<RefInfo> enumerateRefs( const std::string& root, std::string_view filter, const std::string& headSha,
                                            std::size_t* filterNameHits = nullptr )
 {

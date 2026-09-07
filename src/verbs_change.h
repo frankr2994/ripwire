@@ -776,6 +776,7 @@ std::string runCaptureText( RunCapture& cap )
 
 // fork/exec `sh -c CMD` in its own process group, drain the pipe under a poll() deadline, SIGKILL the whole
 // group at the cap, and decode the exit honestly. Zero new dependencies — POSIX only (G3/G5).
+/// Captures a bounded subprocess run while killing its complete process tree on timeout.
 RunCapture runCommandCapture( const std::string& cmd, std::uint32_t timeoutSec )
 {
 #if defined(_WIN32)

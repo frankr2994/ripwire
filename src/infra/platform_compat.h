@@ -86,6 +86,7 @@
       int rw_fflush( std::FILE* stream );
       int rw_close( int fd );
       std::string rw_short_path( const std::string& path );
+      /// Publishes a replacement file with bounded retries for transient Windows sharing violations.
       inline int rw_rename( const char* oldname, const char* newname ) noexcept
       {
           for( int attempt = 0; attempt < 8; ++attempt )
@@ -147,16 +148,19 @@
   #ifndef fflush
     #define fflush rw_fflush
   #endif
+  /// Closes a CRT descriptor while preserving the separate SOCKET close path.
   inline int close( int fd )
   {
       return rw::compat::rw_close( fd );
   }
 
   #include <ctime>
+  /// Fills a caller-provided tm with local time using the thread-safe MSVC API.
   inline struct tm* rw_localtime_r( const time_t* timer, struct tm* buf ) noexcept
   {
       return localtime_s( buf, timer ) == 0 ? buf : nullptr;
   }
+  /// Fills a caller-provided tm with UTC time using the thread-safe MSVC API.
   inline struct tm* rw_gmtime_r( const time_t* timer, struct tm* buf ) noexcept
   {
       return gmtime_s( buf, timer ) == 0 ? buf : nullptr;
@@ -168,21 +172,25 @@
     #define gmtime_r rw_gmtime_r
   #endif
 
+  /// Adapts POSIX directory creation to the CRT while intentionally ignoring POSIX mode bits.
   inline int mkdir( const char* path, int /*mode*/ )
   {
       return _mkdir( path );
   }
 
+  /// Provides the lstat shape used by the POSIX code through the CRT stat result.
   inline int lstat( const char* path, struct stat* buf )
   {
       return ::stat( path, buf );
   }
 
+  /// Supplies the stable non-root identity used by cache-path code on Windows.
   inline unsigned int getuid() noexcept
   {
       return 1000;
   }
 
+  /// Sleeps for the requested POSIX timespec duration and preserves the zero-success convention.
   inline int nanosleep( const struct timespec* req, struct timespec* /*rem*/ ) noexcept
   {
       if( req )
@@ -193,11 +201,13 @@
       return 0;
   }
 
+  /// Keeps the POSIX permission call harmless where Windows descriptors use a different model.
   inline int fchmod( int /*fd*/, int /*mode*/ ) noexcept
   {
       return 0;
   }
 
+  /// Flushes a Windows CRT descriptor to the underlying file through _commit.
   inline int fsync( int fd ) noexcept
   {
       return _commit( fd );
@@ -206,6 +216,7 @@
   using socket_t = SOCKET;
   #define RW_INVALID_SOCKET INVALID_SOCKET
 
+  /// Closes a Winsock handle through closesocket rather than the CRT close function.
   inline int rw_closesocket( SOCKET s ) noexcept
   {
       return ::closesocket( s );
@@ -213,6 +224,7 @@
 
   namespace rw::compat
   {
+      /// Converts POSIX timeval receive timeouts to the millisecond form expected by Winsock.
       inline int rw_setsockopt( SOCKET s, int level, int optname, const void* optval, int optlen )
       {
           if( level == SOL_SOCKET && optname == SO_RCVTIMEO && optlen == sizeof( timeval ) )
@@ -256,31 +268,37 @@
   #ifdef __cplusplus
   namespace rw::compat
   {
+      /// Keeps the POSIX build on the same compatibility API by forwarding flock unchanged.
       inline int rw_flock( int fd, int operation ) noexcept
       {
           return ::flock( fd, operation );
       }
 
+      /// Keeps the POSIX build on the same compatibility API by forwarding pread unchanged.
       inline ssize_t rw_pread( int fd, void* buf, std::size_t count, std::uint64_t offset ) noexcept
       {
           return ::pread( fd, buf, count, static_cast<off_t>( offset ) );
       }
 
+      /// Keeps the POSIX build on the same compatibility API by forwarding realpath unchanged.
       inline char* rw_realpath( const char* path, char* resolved_path ) noexcept
       {
           return ::realpath( path, resolved_path );
       }
 
+      /// Keeps the POSIX build on the same compatibility API by forwarding popen unchanged.
       inline std::FILE* rw_popen( const char* command, const char* mode )
       {
           return ::popen( command, mode );
       }
 
+      /// Keeps the POSIX build on the same compatibility API by forwarding pclose unchanged.
       inline int rw_pclose( std::FILE* stream )
       {
           return ::pclose( stream );
       }
 
+      /// Returns no executable override on POSIX, where the native path helper is unnecessary.
       inline std::string rw_self_exe_path()
       {
           return {};
@@ -289,6 +307,7 @@
 
   using socket_t = int;
   #define RW_INVALID_SOCKET ( -1 )
+  /// Closes the POSIX socket descriptor through close.
   inline int rw_closesocket( int s ) noexcept
   {
       return ::close( s );

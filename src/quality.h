@@ -970,6 +970,7 @@ inline ContentIdIndex contentIdsBySym( const IngestResult& ing, const Graph& g, 
 // /tmp/ripwire-<uid>, always mode 0700. Keeping our artifacts one level below TMPDIR is a performance
 // boundary as well as a security one: cache hygiene must never enumerate an unbounded shared TMPDIR full of
 // unrelated agent-session files. Returns the dir with NO trailing slash. Deterministic per (user, env).
+/// Selects and validates the per-user cache directory, using a fail-closed path on ownership errors.
 inline std::string cacheDirLadder()
 {
 #if defined(_WIN32)
@@ -1124,7 +1125,7 @@ using rw::popenTrimmed;
 
 // Run one short git query against `root` and return its whitespace-trimmed output (expected single-line), or
 // "" on any failure. The shared shape behind gitHeadSha / gitWindowRefSha — `tail` is everything after
-// `git -C <root>` INCLUDING redirects (so a caller can pipe, e.g. "rev-list HEAD 2>/dev/null | tail -1").
+// `git -C <root>` INCLUDING redirects; callers must use git's own limiting flags so the command is portable.
 inline std::string gitOneLine( const std::string& root, const std::string& tail )
 {
     return popenTrimmed( "git -c core.quotepath=false -C " + shSingleQuote( root ) + " " + tail );
@@ -1416,7 +1417,7 @@ inline std::string gitWindowRefSha( const std::string& root, std::uint32_t days 
         return preWindow;
     }
 
-    return gitOneLine( root, "rev-list HEAD 2>/dev/null | tail -1" );   // repo younger than the window → its first commit
+    return gitOneLine( root, "rev-list --max-count=1 --reverse HEAD 2>/dev/null" );   // repo younger than the window → its first commit
 }
 
 // Does `root` sit in a git repo that HAS at least one commit? A WINDOWLESS probe (no --since), so it is true

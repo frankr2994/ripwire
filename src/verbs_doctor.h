@@ -547,6 +547,7 @@ inline DoctorAgentRows doctorAgentRows( const rw::Config& cfg, const char* argv0
     return out;
 }
 
+/// Runs the machine-local doctor checks and emits the complete diagnostic result with honest failure states.
 int runDoctor( const rw::Config& cfg, const char* argv0 )
 {
     using namespace rw;

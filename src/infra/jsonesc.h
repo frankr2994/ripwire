@@ -265,6 +265,7 @@ inline bool isJsonWs( char c ) noexcept
 // it in for free. gitmine.h's rw::shSingleQuote is the more widely used name (main.cpp, prcontext.h,
 // quality.h, mcp server) — kept as the canonical spelling; docparse.h's detail::shellQuote now
 // forwards here instead of carrying its own copy.
+/// Quotes a command argument for the active shell without allowing path data to expand variables.
 inline std::string shSingleQuote( const std::string& s )
 {
 #if defined(_WIN32)

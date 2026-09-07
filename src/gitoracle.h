@@ -589,6 +589,7 @@ inline PatchWalk walkGitPatch( const std::string& cmd, OnLine onLine, KeepWalkin
 //                 a \x01-led header line per commit. \x01 cannot appear in a unified-diff marker column, so
 //                 the framing is unambiguous without a second pass. %cs is git's COMMITTER date — the same
 //                 deterministic clock quality::gitCommitterDateIso uses; the wall clock is never consulted.
+/// Runs the bounded git history probe and returns an honest, possibly truncated name-removal index.
 inline HistoryIndex runProbe( const std::string& root )
 {
     HistoryIndex idx;

@@ -879,6 +879,7 @@ struct ReadFd
     ReadFd& operator=( const ReadFd& ) = delete;
     ReadFd( ReadFd&& other ) noexcept : fd( other.fd ) { other.fd = -1; }
     ~ReadFd() { if( fd >= 0 ) { ::close( fd ); } }
+    /// Releases the descriptor early so Windows can publish a replacement cache file.
     void close() noexcept { if( fd >= 0 ) { ::close( fd ); fd = -1; } }
 
     // openOnce, not a move-assignment: the only mutation this type needs is "fill an empty guard", and
@@ -944,6 +945,7 @@ struct CacheFrame
     long long               mtimeNs     = -1;// the blob's own mtime — the warm-run racy-rule reference
     bool                    ok          = false;
     CacheReject             reason      = CacheReject::Absent;   // meaningful only while ok == false
+    /// Closes the held cache frame before an atomic replacement is attempted.
     void close() noexcept { blob.close(); }
 };
 
@@ -1925,6 +1927,7 @@ inline void finishCacheBlob( ByteW& w, const std::vector<CacheEntry>& table )
 // write the cache atomically (path.tmp → rename); groups the merged raw facts back by file.
 // T5: `rootDir` is the CURRENT invocation's ingest root — every file key is stored root-relative
 // (relForHash) rather than verbatim, so the cache blob is committable/portable (see kCacheVersion=3).
+/// Persists the cache through a validated carry-forward and a platform-safe atomic publication.
 inline void saveCache( const std::string& path, std::string_view rootDir, const std::vector<std::string>& files,
                        const std::vector<std::uint64_t>& fileHash,
                        const std::vector<long long>& fileSize, const std::vector<long long>& fileMtime,

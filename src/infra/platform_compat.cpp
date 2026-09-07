@@ -24,6 +24,7 @@
 namespace rw::compat
 {
 
+/// Maps POSIX advisory locking flags to Win32 byte-range locks and reports failures through errno.
 int rw_flock( int fd, int operation ) noexcept
 {
     HANDLE hFile = reinterpret_cast<HANDLE>( _get_osfhandle( fd ) );
@@ -73,6 +74,7 @@ int rw_flock( int fd, int operation ) noexcept
     return 0;
 }
 
+/// Reads a byte range at an explicit offset without changing the descriptor's shared file position.
 ssize_t rw_pread( int fd, void* buf, std::size_t count, std::uint64_t offset ) noexcept
 {
     HANDLE hFile = reinterpret_cast<HANDLE>( _get_osfhandle( fd ) );
@@ -101,6 +103,7 @@ ssize_t rw_pread( int fd, void* buf, std::size_t count, std::uint64_t offset ) n
     return static_cast<ssize_t>( bytesRead );
 }
 
+/// Resolves a Windows path through the CRT equivalent of POSIX realpath.
 char* rw_realpath( const char* path, char* resolved_path ) noexcept
 {
     if( path == nullptr )
@@ -111,6 +114,7 @@ char* rw_realpath( const char* path, char* resolved_path ) noexcept
     return _fullpath( resolved_path, path, PATH_MAX );
 }
 
+/// Runs a shell command with binary pipes and translates POSIX null-device redirection to Windows NUL.
 std::FILE* rw_popen( const char* command, const char* mode )
 {
     if( command == nullptr || mode == nullptr )
@@ -143,6 +147,7 @@ std::FILE* rw_popen( const char* command, const char* mode )
     return _popen( cmd.c_str(), winMode.c_str() );
 }
 
+/// Returns an 8.3 path suitable for cmd.exe redirection, or the normalized input when conversion fails.
 std::string rw_short_path( const std::string& path )
 {
     if( path.empty() )
@@ -166,6 +171,7 @@ std::string rw_short_path( const std::string& path )
     return winPath;
 }
 
+/// Closes a command pipe opened by rw_popen and returns the child-process status.
 int rw_pclose( std::FILE* stream )
 {
     if( stream == nullptr )
@@ -175,6 +181,7 @@ int rw_pclose( std::FILE* stream )
     return _pclose( stream );
 }
 
+/// Returns the absolute path of the running executable when Windows can provide it.
 std::string rw_self_exe_path()
 {
     char buf[MAX_PATH];
@@ -187,6 +194,7 @@ std::string rw_self_exe_path()
 }
 
 struct pollfd;
+/// Polls inherited Windows pipe handles until input, hangup, an invalid descriptor, or the deadline is seen.
 int rw_poll( struct pollfd* fds, unsigned long nfds, int timeout )
 {
     if( fds == nullptr || nfds == 0 )
@@ -264,6 +272,7 @@ struct MemStreamInfo
 static std::mutex                                     s_memstream_mutex;
 static std::unordered_map<std::FILE*, MemStreamInfo> s_memstreams;
 
+/// Creates a temporary-file-backed stream with the open_memstream ownership contract.
 std::FILE* rw_open_memstream( char** bufloc, std::size_t* sizeloc )
 {
     if( bufloc == nullptr || sizeloc == nullptr )
@@ -324,6 +333,7 @@ std::FILE* rw_open_memstream( char** bufloc, std::size_t* sizeloc )
     return fp;
 }
 
+/// Flushes a compatibility memory stream and refreshes its caller-owned buffer and byte count.
 int rw_fflush( std::FILE* stream )
 {
     if( stream == nullptr )
@@ -368,6 +378,7 @@ int rw_fflush( std::FILE* stream )
     return ::fflush( stream );
 }
 
+/// Flushes and closes a compatibility memory stream, publishing its final buffer before release.
 int rw_fclose( std::FILE* stream )
 {
     if( stream == nullptr )
@@ -422,6 +433,7 @@ int rw_fclose( std::FILE* stream )
     return ::fclose( stream );
 }
 
+/// Closes a CRT file descriptor without confusing it with a Winsock SOCKET.
 int rw_close( int fd )
 {
     if( fd < 0 )
@@ -433,11 +445,13 @@ int rw_close( int fd )
 
 struct WinsockAutoInit
 {
+    /// Initializes Winsock for the process before any socket compatibility wrapper is used.
     WinsockAutoInit()
     {
         WSADATA d;
         WSAStartup( MAKEWORD( 2, 2 ), &d );
     }
+    /// Balances the process-wide Winsock initialization at normal process teardown.
     ~WinsockAutoInit()
     {
         WSACleanup();

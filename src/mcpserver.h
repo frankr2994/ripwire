@@ -95,6 +95,7 @@ inline bool iEquals( std::string_view a, std::string_view b ) noexcept
     return true;
 }
 
+/// Trims HTTP header whitespace without allocating or changing the source buffer.
 inline std::string_view trim( std::string_view s ) noexcept
 {
     std::size_t b = 0, e = s.size();
@@ -110,6 +111,7 @@ inline std::string_view trim( std::string_view s ) noexcept
 }
 
 // send an entire buffer, tolerating short writes; false if the peer went away mid-write (we just drop it).
+/// Sends one complete HTTP buffer while keeping each platform's socket-width and error conventions.
 inline bool sendAll( socket_t fd, const std::string& data ) noexcept
 {
     std::size_t sent = 0;
@@ -134,6 +136,7 @@ inline bool sendAll( socket_t fd, const std::string& data ) noexcept
 }
 
 // build + send a minimal HTTP/1.1 response. Connection: close — one request per connection (§2b serialize).
+/// Builds and sends the single-response envelope used by the serialized MCP connection loop.
 inline void respond( socket_t fd, const char* status, const char* contentType, const std::string& body ) noexcept
 {
     std::string out;
@@ -184,6 +187,7 @@ struct Request
 // makes recv() return <= 0 → we abandon the connection (server lives).
 //
 // `tooManyHeaderBytes` / `tooLargeBody` out-params let the caller pick the right 4xx without a wider enum.
+/// Parses one bounded HTTP request and degrades malformed or stalled input into a caller-visible status.
 inline Request readRequest( socket_t fd, bool& tooManyHeaderBytes, bool& tooLargeBody )
 {
     tooManyHeaderBytes = false;
@@ -420,6 +424,7 @@ inline bool isLoopbackHost( std::string_view host ) noexcept
 
 // serve the remote HTTP transport. Returns the process exit code. REFUSES TO START (returns 1 + stderr)
 // when the security preconditions are not met; otherwise loops forever, one request at a time.
+/// Runs the single-threaded MCP HTTP listener with platform-correct socket ownership and cleanup.
 inline int runMcpHttp( const McpHttpConfig& cfg )
 {
     using namespace mcphttp;
