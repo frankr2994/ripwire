@@ -87,6 +87,15 @@ cmake -S . -B build -G Ninja -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang
 cmake --build build -j
 ```
 
+For maximum performance (Release mode with ThinLTO and host-CPU vectorization):
+
+```cmd
+cmake -S . -B build-release -G Ninja -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_BUILD_TYPE=Release -DRIPWIRE_NATIVE=ON
+cmake --build build-release -j
+```
+
+Profile-Guided Optimization (PGO) is also supported on Windows via `scripts/pgobuild.sh` (under Git Bash) or CMake (`-DRIPWIRE_PGO=generate` and `-DRIPWIRE_PGO=use`), providing an additional 2–11% speedup across hot capture, query, and AST linting paths.
+
 Or using the Visual Studio generator with Clang-CL:
 
 ```cmd
