@@ -38,6 +38,11 @@
 #include <cerrno>      // EWOULDBLOCK — the LOCK_NB retry predicate
 #include <ctime>       // ::nanosleep — the lock's bounded 10 ms poll
 
+#if defined(_WIN32)
+#include <aclapi.h>
+#include <sddl.h>
+#endif
+
 #include <algorithm>
 #include <atomic>       // Phase-M: the tmp-name sequence counter (atomicWriteFile); also the A5 process-once cache-sweep guard
 #include <cctype>       // std::isxdigit/std::isdigit — B10.2d churn-blame porcelain parsing
@@ -965,8 +970,118 @@ inline ContentIdIndex contentIdsBySym( const IngestResult& ing, const Graph& g, 
 // /tmp/ripwire-<uid>, always mode 0700. Keeping our artifacts one level below TMPDIR is a performance
 // boundary as well as a security one: cache hygiene must never enumerate an unbounded shared TMPDIR full of
 // unrelated agent-session files. Returns the dir with NO trailing slash. Deterministic per (user, env).
+/// Selects and validates the per-user cache directory, using a fail-closed path on ownership errors.
 inline std::string cacheDirLadder()
 {
+#if defined(_WIN32)
+    std::string d;
+    const char* localAppData = std::getenv( "LOCALAPPDATA" );
+    const char* tempDir = std::getenv( "TEMP" );
+    if( !tempDir ) tempDir = std::getenv( "TMP" );
+
+    if( localAppData && *localAppData )
+    {
+        d = localAppData;
+    }
+    else if( tempDir && *tempDir )
+    {
+        d = tempDir;
+    }
+    else
+    {
+        d = "C:/Windows/Temp";
+    }
+    while( d.size() > 1 && ( d.back() == '/' || d.back() == '\\' ) )
+    {
+        d.pop_back();
+    }
+    d += "/ripwire";
+
+    SECURITY_ATTRIBUTES sa{};
+    sa.nLength = sizeof( sa );
+    sa.bInheritHandle = FALSE;
+    PSECURITY_DESCRIPTOR pSD = nullptr;
+    if( ConvertStringSecurityDescriptorToSecurityDescriptorA(
+            "D:P(A;OICI;GA;;;OW)(A;OICI;GA;;;BA)",
+            SDDL_REVISION_1,
+            &pSD,
+            nullptr ) )
+    {
+        sa.lpSecurityDescriptor = pSD;
+    }
+
+    if( !pSD )
+    {
+        return "NUL";
+    }
+
+    CreateDirectoryA( d.c_str(), &sa );
+    LocalFree( pSD );
+
+    const DWORD attrs = GetFileAttributesA( d.c_str() );
+    if( attrs == INVALID_FILE_ATTRIBUTES || !( attrs & FILE_ATTRIBUTE_DIRECTORY ) )
+    {
+        return "NUL";
+    }
+
+    HANDLE hToken = NULL;
+    if( !OpenProcessToken( GetCurrentProcess(), TOKEN_QUERY, &hToken ) )
+    {
+        return "NUL";
+    }
+
+    BYTE tokenBuf[ 256 ];
+    DWORD tokenLen = 0;
+    GetTokenInformation( hToken, TokenUser, tokenBuf, sizeof( tokenBuf ), &tokenLen );
+    const TOKEN_USER* pTokenUser = reinterpret_cast<const TOKEN_USER*>( tokenBuf );
+    const PSID userSid = pTokenUser ? pTokenUser->User.Sid : nullptr;
+
+    PSID pSidOwner = nullptr;
+    PSECURITY_DESCRIPTOR pSDGet = nullptr;
+    const DWORD res = GetNamedSecurityInfoA(
+        d.c_str(),
+        SE_FILE_OBJECT,
+        OWNER_SECURITY_INFORMATION,
+        &pSidOwner,
+        nullptr,
+        nullptr,
+        nullptr,
+        &pSDGet );
+
+    bool ownerMatch = false;
+    if( res == ERROR_SUCCESS && pSidOwner && userSid )
+    {
+        if( EqualSid( pSidOwner, userSid ) )
+        {
+            ownerMatch = true;
+        }
+        else
+        {
+            SID_IDENTIFIER_AUTHORITY ntAuth = SECURITY_NT_AUTHORITY;
+            PSID adminSid = nullptr;
+            if( AllocateAndInitializeSid( &ntAuth, 2, SECURITY_BUILTIN_DOMAIN_RID, DOMAIN_ALIAS_RID_ADMINS, 0, 0, 0, 0, 0, 0, &adminSid ) )
+            {
+                if( EqualSid( pSidOwner, adminSid ) )
+                {
+                    ownerMatch = true;
+                }
+                FreeSid( adminSid );
+            }
+        }
+    }
+
+    if( pSDGet )
+    {
+        LocalFree( pSDGet );
+    }
+    CloseHandle( hToken );
+
+    if( ownerMatch )
+    {
+        return d;
+    }
+    return "NUL";
+#else
     std::string d;
     const char* tmpDir = std::getenv( "TMPDIR" );
     if( tmpDir && *tmpDir )
@@ -999,6 +1114,7 @@ inline std::string cacheDirLadder()
         }
     }
     return "/dev/null/ripwire-cache-unavailable";   // unsafe/unusable candidate: make cache I/O fail closed
+#endif
 }
 
 // popen a shell command and return its trimmed stdout ("" on any failure — never crashes). THE one copy of
@@ -1009,7 +1125,7 @@ using rw::popenTrimmed;
 
 // Run one short git query against `root` and return its whitespace-trimmed output (expected single-line), or
 // "" on any failure. The shared shape behind gitHeadSha / gitWindowRefSha — `tail` is everything after
-// `git -C <root>` INCLUDING redirects (so a caller can pipe, e.g. "rev-list HEAD 2>/dev/null | tail -1").
+// `git -C <root>` INCLUDING redirects; callers must use git's own limiting flags so the command is portable.
 inline std::string gitOneLine( const std::string& root, const std::string& tail )
 {
     return popenTrimmed( "git -c core.quotepath=false -C " + shSingleQuote( root ) + " " + tail );
@@ -1267,9 +1383,15 @@ inline bool gitIsAncestor( const std::string& root, const std::string& ancestor,
         DEGRADED_PATH_ALERT( "quality: refusing a non-sha revision token on the merge-base path" );
         return false;                                          // degrade: "not reachable" → the caller self-heals the pin
     }
+#if defined( _WIN32 )
+    const std::string cmd = "git -c core.quotepath=false -C " + shSingleQuote( root )
+                          + " merge-base --is-ancestor " + shSingleQuote( ancestor ) + " " + shSingleQuote( descendant )
+                          + " >NUL 2>&1";
+#else
     const std::string cmd = "git -c core.quotepath=false -C " + shSingleQuote( root )
                           + " merge-base --is-ancestor " + shSingleQuote( ancestor ) + " " + shSingleQuote( descendant )
                           + " >/dev/null 2>&1";
+#endif
     return std::system( cmd.c_str() ) == 0;
 }
 
@@ -1301,7 +1423,7 @@ inline std::string gitWindowRefSha( const std::string& root, std::uint32_t days 
         return preWindow;
     }
 
-    return gitOneLine( root, "rev-list HEAD 2>/dev/null | tail -1" );   // repo younger than the window → its first commit
+    return gitOneLine( root, "rev-list --max-count=1 --reverse HEAD 2>/dev/null" );   // repo younger than the window → its first commit
 }
 
 // Does `root` sit in a git repo that HAS at least one commit? A WINDOWLESS probe (no --since), so it is true
@@ -2373,8 +2495,13 @@ inline std::string materializeCommitTree( const std::string& root, const std::st
     if( !fs::create_directories( fs::path( tmpRoot ), ec ) && ec )
     { DEGRADED_PATH_ALERT( "quality: cannot create commit-tree temp dir" ); return {}; }
 
+#if defined( _WIN32 )
+    const std::string extract = "git -c core.quotepath=false -C " + shSingleQuote( root )
+                              + " archive --format=tar " + shSingleQuote( rev ) + " -- 2>NUL | tar -x -C " + shSingleQuote( tmpRoot ) + " 2>NUL";
+#else
     const std::string extract = "git -c core.quotepath=false -C " + shSingleQuote( root )
                               + " archive --format=tar " + shSingleQuote( rev ) + " -- 2>/dev/null | tar -x -C " + shSingleQuote( tmpRoot ) + " 2>/dev/null";
+#endif
     if( std::system( extract.c_str() ) != 0 )
     {
         DEGRADED_PATH_ALERT( "quality: git archive failed — committed tree unavailable" );

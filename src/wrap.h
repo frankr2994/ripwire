@@ -233,10 +233,15 @@ inline std::string wrapCommandToken( const std::string_view executablePath )
     namespace fs = std::filesystem;
     const char* pathEnv = std::getenv( "PATH" );
     std::string_view path( pathEnv ? pathEnv : "" );
+#if defined( _WIN32 )
+    constexpr char pathDelim = ';';
+#else
+    constexpr char pathDelim = ':';
+#endif
     while( !path.empty() )
     {
-        const std::size_t    colon = path.find( ':' );
-        const std::string_view dir = path.substr( 0, colon );
+        const std::size_t      colon = path.find( pathDelim );
+        const std::string_view dir   = path.substr( 0, colon );
         path = ( colon == std::string_view::npos ) ? std::string_view() : path.substr( colon + 1 );
         if( dir.empty() )
         {
@@ -244,10 +249,17 @@ inline std::string wrapCommandToken( const std::string_view executablePath )
         }
         std::error_code ec;
         const fs::path  candidate = fs::path( std::string( dir ) ) / "ripwire";
-        if( fs::is_regular_file( candidate, ec ) && !ec && ::access( candidate.c_str(), X_OK ) == 0 )
+        if( fs::is_regular_file( candidate, ec ) && !ec && ::access( candidate.string().c_str(), X_OK ) == 0 )
         {
             return "ripwire";
         }
+#if defined( _WIN32 )
+        const fs::path candidateExe = fs::path( std::string( dir ) ) / "ripwire.exe";
+        if( fs::is_regular_file( candidateExe, ec ) && !ec && ::access( candidateExe.string().c_str(), X_OK ) == 0 )
+        {
+            return "ripwire";
+        }
+#endif
     }
     return executablePath.empty() ? std::string( "ripwire" ) : std::string( executablePath );
 }

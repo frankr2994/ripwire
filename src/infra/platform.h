@@ -33,13 +33,17 @@
 // Compiler attributes
 // ==========================================================================
 
-#ifdef __clang__
+#if defined(__clang__)
 #define ALWAYS_INLINE  [[clang::always_inline]] inline
+#define memorycopy(dst,src,size)  __builtin_memcpy(dst,src,size)
+#elif defined(_MSC_VER)
+#define ALWAYS_INLINE  __forceinline
+#include <cstring>
+#define memorycopy(dst,src,size)  std::memcpy(dst,src,size)
 #else
 #define ALWAYS_INLINE  __attribute__((always_inline)) inline
-#endif
-
 #define memorycopy(dst,src,size)  __builtin_memcpy(dst,src,size)
+#endif
 
 // Diagnostics.h provides VERIFY, VERIFY_TEXT, VERIFY_NOT_REACHED, PANIC, and
 // DEGRADED_PATH_ALERT. Included here, not merely alongside, because this header is
