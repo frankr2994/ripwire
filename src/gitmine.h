@@ -885,7 +885,8 @@ inline GitPathOffset deriveGitPathOffset( const IngestResult& ing, std::uint32_t
         {
             continue;
         }
-        probeOrder.emplace_back( std::uint32_t( std::count( ing.files[f].begin(), ing.files[f].end(), '/' ) ), f );
+        const std::string probe = normalizeJoinPath( ing.files[f] );
+        probeOrder.emplace_back( std::uint32_t( std::count( probe.begin(), probe.end(), '/' ) ), f );
     }
     std::sort( probeOrder.begin(), probeOrder.end() );
 
@@ -894,7 +895,7 @@ inline GitPathOffset deriveGitPathOffset( const IngestResult& ing, std::uint32_t
         // The probe's ABSOLUTE path, resolved through its DIRECTORY rather than through the file itself: a
         // symlinked file inside a tree resolves to wherever it points (possibly another repo entirely), while
         // its directory is the tree's own. diskPath() is the disk spelling behind a labeled multi-root id.
-        const std::string& disk     = diskPath( ing, f );
+        const std::string disk = normalizeJoinPath( diskPath( ing, f ) );
         const std::size_t  slash    = disk.rfind( '/' );
         const std::string  probeDir = ( slash == std::string::npos ) ? std::string{ "." } : ( slash == 0 ? std::string{ "/" } : disk.substr( 0, slash ) );
         char               resolvedDir[ PATH_MAX ];
@@ -903,7 +904,7 @@ inline GitPathOffset deriveGitPathOffset( const IngestResult& ing, std::uint32_t
             continue; // this probe is unreadable — try the next file
         }
 
-        const std::string top = gitRepoToplevel( resolvedDir );
+        const std::string top = normalizeJoinPath( gitRepoToplevel( resolvedDir ) );
         if( top.empty() )
         {
             break; // not a git repo at all — no later file changes that
@@ -918,7 +919,7 @@ inline GitPathOffset deriveGitPathOffset( const IngestResult& ing, std::uint32_t
             topSlash += '/';
         }
 
-        std::string absProbe{ resolvedDir };
+        std::string absProbe = normalizeJoinPath( resolvedDir );
         if( absProbe.back() != '/' )
         {
             absProbe += '/';
@@ -941,7 +942,7 @@ inline GitPathOffset deriveGitPathOffset( const IngestResult& ing, std::uint32_t
             if( isBoundarySuffix( normalizedIndexProbe, tail ) )
             {
                 offset.isDerived        = true;
-                offset.indexStripPrefix = indexProbe.substr( 0, indexProbe.size() - tail.size() );
+                offset.indexStripPrefix = normalizedIndexProbe.substr( 0, normalizedIndexProbe.size() - tail.size() );
                 offset.gitPrefix        = gitRelProbe.substr( 0, tailStart );
                 break;
             }
@@ -1105,7 +1106,7 @@ inline void addRootFilesToGitPathIndex( const IngestResult& ing, std::uint32_t r
             continue;
         }
 
-        const std::string& fp = ing.files[f];
+        const std::string fp = normalizeJoinPath( ing.files[f] );
         if( fp.size() <= stripByteCount || fp.compare( 0, stripByteCount, offset.indexStripPrefix ) != 0 )
         {
             if( notes.unspelledFileCount++ == 0 )
@@ -2063,7 +2064,7 @@ inline std::uint32_t resolveFileSuffix( const IngestResult& ing, std::string_vie
     const std::string normalizedSub = normalizePathForMatch( sub );
     for( std::uint32_t f = 0; f < ing.files.size(); ++f )
     {
-        const std::string& fp = ing.files[f];
+        const std::string fp = normalizeJoinPath( ing.files[f] );
         const std::string normalizedPath = normalizePathForMatch( fp );
         if( normalizedPath.size() >= normalizedSub.size() )
         {
@@ -2746,7 +2747,7 @@ inline bool hasEnclosingGitRepo( const std::string& root )
     {
         return false; // unresolvable root → treat as no repo (degrade)
     }
-    std::string dir{ resolved };   // brace-init: dir( resolved ) parses as a function declarator (vexing-parse lookalike) and would pollute the symbol map
+    std::string dir = normalizeJoinPath( resolved );   // brace-init: dir( resolved ) parses as a function declarator (vexing-parse lookalike) and would pollute the symbol map
 
     // walk up at most 64 levels (any real path is far shallower; the bound is a hostile-symlink guard)
     for( int levelIndex = 0; levelIndex < 64 && !dir.empty(); ++levelIndex )

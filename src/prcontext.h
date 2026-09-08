@@ -413,6 +413,14 @@ inline PrContextMask gitDiffChangedMaskNumstat( const std::string& root, const I
         }
     }
 
+    const auto pathIndex = gitPathIndexOfFiles( ing, onlyRoot );
+    for( const auto& path : changed )
+    {
+        if( resolveGitPath( pathIndex, path ) == UINT32_MAX )
+        {
+            std::fprintf( stderr, "ripwire: incomplete coverage: changed path is not indexed: %s\n", path.c_str() );
+        }
+    }
     markChangedFilesFromGitPaths( changed, ing, result.mask, onlyRoot );   // §H6b — the ONE join (gitmine.h)
     return result;
 }

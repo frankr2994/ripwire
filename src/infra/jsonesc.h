@@ -273,21 +273,18 @@ inline std::string shSingleQuote( const std::string& s )
     // Closing the quote, escaping % as ^%, and reopening the quote ("foo"^%"bar") prevents cmd.exe
     // from expanding the variable, while CommandLineToArgvW joins the segments into foo%bar.
     std::string out = "\"";
+    std::size_t slashes = 0;
     for( char c : s )
     {
-        if( c == '"' )
-        {
-            out += "\\\"";
-        }
-        else if( c == '%' )
-        {
-            out += "\"^%\"";
-        }
-        else
-        {
-            out += c;
-        }
+        if( c == '\\' ) { ++slashes; continue; }
+        out.append( slashes * ( c == '"' || c == '%' ? 2 : 1 ), '\\' );
+        slashes = 0;
+        if( c == '"' ) out += "\\\"";
+        else if( c == '%' ) out += "\"^%\"";
+        else out += c;
     }
+    // CRT argument parsing consumes pairs of backslashes immediately before a closing quote.
+    out.append( slashes * 2, '\\' );
     out += "\"";
     return out;
 #else

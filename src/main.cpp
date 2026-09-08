@@ -4053,6 +4053,39 @@ static int dispatchMain( const rw::Config& cfg, char** argv )
         return *handled;
     }
 
+    if( cfg.indexCoverage )
+    {
+        const std::string prefix = cfg.roots.size() == 1 ? rw::sarif::rootPrefixOf( cfg.roots[0] ) : "";
+        const auto& skips = ing.crawlSkips;
+        std::printf( "{\"version\":1,\"indexed\":[" );
+        bool comma = false;
+        for( const auto& file : ing.files )
+        {
+            if( comma ) std::putchar( ',' );
+            comma = true;
+            rw::sarif::jsonQuoted( stdout, rw::normalizePathForMatch( rw::sarif::rootRelativeUri( file, prefix ) ) );
+        }
+        std::printf( "],\"skipped\":[" );
+        comma = false;
+        const auto rows = [&]( const auto& entries, const char* reason ) {
+            for( const auto& entry : entries ) {
+                if( comma ) std::putchar( ',' );
+                comma = true;
+                std::printf( "{\"path\":" );
+                rw::sarif::jsonQuoted( stdout, rw::normalizePathForMatch( rw::sarif::rootRelativeUri( entry.path, prefix ) ) );
+                std::printf( ",\"reason\":\"%s\"}", reason );
+            }
+        };
+        rows( skips.excluded, "excluded" ); rows( skips.unsupported, "unsupported" );
+        rows( skips.ignored, "ignored" ); rows( skips.ignoredDirRows, "ignored-directory" );
+        rows( ing.skippedOversize, "oversize" );
+        const bool capped = skips.excluded.size() < skips.excludedFiles || skips.unsupported.size() < skips.unsupportedFiles
+            || skips.ignored.size() < skips.ignoredFiles || skips.ignoredDirRows.size() < skips.ignoredDirs;
+        std::printf( "],\"skippedRowsCapped\":%s,\"unlistedPrunedDirectories\":%llu}\n", capped ? "true" : "false",
+            (unsigned long long)( skips.prunedDirs + skips.excludedDirs ) );
+        return 0;
+    }
+
     if( std::optional<int> handled = runSkipped( dsp ) )
     {
         return *handled;

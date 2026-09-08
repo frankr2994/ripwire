@@ -59,7 +59,11 @@ inline std::string normalizePathForMatch( std::string_view path )
     out.reserve( path.size() );
     for( const char c : path )
     {
+        #ifdef _WIN32
         out.push_back( c == '\\' ? '/' : c );
+#else
+        out.push_back( c );
+#endif
     }
     while( out.size() >= 2 && out[0] == '.' && out[1] == '/' )
     {
@@ -582,7 +586,13 @@ inline std::uint64_t fnv1a64( std::string_view s ) noexcept
 // than an empty one. Empty root ⇒ just the leading-`./`/`/` normalization (equivalent to root ".").
 inline std::string_view relForHash( std::string_view path, std::string_view root ) noexcept
 {
-    const auto isPathSep = []( char c ) noexcept { return c == '/' || c == '\\'; };
+    const auto isPathSep = []( char c ) noexcept {
+#ifdef _WIN32
+        return c == '/' || c == '\\';
+#else
+        return c == '/';
+#endif
+    };
     // 1) strip the ingest-root prefix if present (allow one optional trailing '/' on the root).
     std::string_view rootTrim = root;
     while( rootTrim.size() > 1 && isPathSep( rootTrim.back() ) )

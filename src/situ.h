@@ -446,7 +446,7 @@ inline void writeSituation( std::FILE* out, const std::string& root, const Inges
         // at all. The MCP JSON twin (mcpverbs.h) already split this correctly; the CLI text form did not.
         if( nChanged == 0 )
         {
-            std::fprintf( out, "  (0 changed files — working tree is clean, nothing to analyze)\n" );
+            std::fprintf( out, "  (0 indexed changed files — inspect coverage diagnostics; unindexed changes may exist)\n" );
         }
         else
         {

@@ -18,6 +18,22 @@ import sys
 import tempfile
 import time
 
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="backslashreplace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="backslashreplace")
+
+# Windows app-execution aliases can advertise python3 without an interpreter.
+# Bash fixtures must use this runner's actual Python, and scratch repos must not
+# inherit a user's home-directory repository during non-Git tests.
+_windows_tools = None
+if os.name == "nt":
+    _windows_tools = tempfile.TemporaryDirectory(prefix="ripwire-harness-tools-")
+    python_path = sys.executable.replace("\\", "/").replace("'", "'\\''")
+    with open(os.path.join(_windows_tools.name, "python3"), "w", encoding="utf-8", newline="\n") as shim:
+        shim.write("#!/bin/sh\nexec '" + python_path + "' \"$@\"\n")
+    os.environ["PATH"] = _windows_tools.name + os.pathsep + os.environ.get("PATH", "")
+    os.environ.setdefault("GIT_CEILING_DIRECTORIES", tempfile.gettempdir())
+
 root = os.path.abspath(sys.argv[1])
 binp = os.path.abspath(sys.argv[2])
 jobs = 6
@@ -375,7 +391,8 @@ def failure_report(out, logpath):
 
 
 def run(g):
-    env = dict(os.environ, RIPWIRE_BIN=binp)
+    shell_path = lambda p: ("/" + p[0].lower() + p[2:].replace("\\", "/")) if os.name == "nt" and len(p) > 2 and p[1] == ":" else p
+    env = dict(os.environ, RIPWIRE_BIN=shell_path(binp))
     if g in GATE_BUDGET_SEC:
         limit, scaled = GATE_BUDGET_SEC[g], ""
     else:
@@ -384,7 +401,7 @@ def run(g):
     t0 = time.time()
     try:
         p = subprocess.run(
-            ["bash", os.path.join(testdir, g)],
+            ["bash", shell_path(os.path.join(testdir, g))],
             cwd=root, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=limit,
         )
         rc, out = p.returncode, p.stdout.decode("utf-8", "replace")
@@ -409,7 +426,7 @@ def run(g):
             d = _fail_log_dir()
             os.makedirs(d, exist_ok=True)
             logpath = os.path.join(d, g + ".log")
-            with open(logpath, "w") as fh:
+            with open(logpath, "w", encoding="utf-8", errors="backslashreplace") as fh:
                 fh.write(out)
         except OSError:
             logpath = "(not written)"

@@ -975,11 +975,19 @@ inline std::string cacheDirLadder()
 {
 #if defined(_WIN32)
     std::string d;
+    // Test harnesses and isolated Orchestra tasks may provide a private
+    // temporary root. Honor it before the user-wide Windows locations so the
+    // same cache-isolation contract applies on both platforms.
+    const char* tmpDir = std::getenv( "TMPDIR" );
     const char* localAppData = std::getenv( "LOCALAPPDATA" );
     const char* tempDir = std::getenv( "TEMP" );
     if( !tempDir ) tempDir = std::getenv( "TMP" );
 
-    if( localAppData && *localAppData )
+    if( tmpDir && *tmpDir )
+    {
+        d = tmpDir;
+    }
+    else if( localAppData && *localAppData )
     {
         d = localAppData;
     }

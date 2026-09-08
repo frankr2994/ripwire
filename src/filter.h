@@ -21,6 +21,11 @@ namespace rw
 // of the scan — the copy is what would drift.
 inline bool hasDirSegment( std::string_view p, std::string_view seg ) noexcept
 {
+#ifdef _WIN32
+    std::string normalized( p );
+    std::replace( normalized.begin(), normalized.end(), '\\', '/' );
+    p = normalized;
+#endif
     std::size_t pos = 0;
     while( ( pos = p.find( seg, pos ) ) != std::string_view::npos )
     {
@@ -35,6 +40,11 @@ inline bool hasDirSegment( std::string_view p, std::string_view seg ) noexcept
 
 inline bool isTestPath( std::string_view p ) noexcept
 {
+#ifdef _WIN32
+    std::string normalized( p );
+    std::replace( normalized.begin(), normalized.end(), '\\', '/' );
+    p = normalized;
+#endif
     // directory segment: test/ or tests/  (bounded by '/' or start)
     for( std::string_view seg : { std::string_view( "test/" ), std::string_view( "tests/" ) } )
     {

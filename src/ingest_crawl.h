@@ -856,7 +856,7 @@ bool underGitRoot( const char* rootDir )
     char        resolved[ PATH_MAX ];
     if( ::realpath( dir.c_str(), resolved ) != nullptr )
     {
-        dir = resolved;
+        dir = normalizePathForMatch( resolved );
     }
     for( ;; )
     {
@@ -1112,7 +1112,10 @@ CrawlResult collectSources( const char* rootDir, const std::vector<std::string>&
         {
             if( full.empty() )
             {
-                full = p.string();
+                // Store filesystem paths in Git's portable spelling. Keeping
+                // backslashes here leaks native Windows syntax into selectors,
+                // XML rows, cache keys, and downstream CSV consumers.
+                full = p.generic_string();
             }
             return full;
         };

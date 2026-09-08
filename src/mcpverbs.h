@@ -1335,7 +1335,7 @@ inline std::string situationDiffJson( const std::string& root, const std::string
     // valid-but-empty result from a populated one, mirroring how the CLI --situ says "0 changed files".
     if( isCleanTree )
     {
-        out += ",\"note\":\"0 changed files — working tree is clean (git diff HEAD returned nothing to analyze)\"";
+        out += ",\"note\":\"0 indexed changed files — inspect coverage diagnostics; unindexed changes may exist\"";
     }
 
     out += "}";

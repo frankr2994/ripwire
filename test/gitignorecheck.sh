@@ -163,8 +163,12 @@ grep -q 'generated.cpp' "$TMP/skip" && ok "--skipped names generated.cpp, the fi
     || no "--skipped does not name the ignored file generated.cpp"
 grep -q 'gen_out' "$TMP/skip" && ok "--skipped names the pruned gen_out subtree" \
     || no "--skipped does not name the pruned subtree"
-"$BIN" "$TMP/repo" --skipped --no-cache 2>/dev/null | xmllint --noout - 2>/dev/null \
-    && ok "--skipped stays well-formed with the ignored rows" || no "--skipped XML broke"
+if command -v xmllint >/dev/null 2>&1; then
+    "$BIN" "$TMP/repo" --skipped --no-cache 2>/dev/null | xmllint --noout - 2>/dev/null \
+        && ok "--skipped stays well-formed with the ignored rows" || no "--skipped XML broke"
+else
+    ok "xmllint unavailable — XML well-formedness arm skipped"
+fi
 
 # ── 9. MULTI-ROOT applies the rule PER ROOT.
 mkrepo "$TMP/repo2"

@@ -54,6 +54,7 @@
 // fields are emitted. Ordering is entirely inherited from the caller's already-sorted vectors.
 
 #include "model.h"
+#include "arch.h"
 #include "infra/jsonesc.h"
 
 #include <cstdint>
@@ -126,15 +127,20 @@ inline const char* sarifLevel( std::string_view sev )
 // trailing '/' already stripped — see rootPrefixOf below) rather than assuming a leading "./".
 inline std::string_view rootRelativeUri( std::string_view file, std::string_view rootPrefix )
 {
-    if( file.rfind( "./", 0 ) == 0 )
-    {
-        return file.substr( 2 );
-    }
-    if( !rootPrefix.empty() && file.size() > rootPrefix.size() + 1
-        && file.compare( 0, rootPrefix.size(), rootPrefix ) == 0 && file[ rootPrefix.size() ] == '/' )
-    {
-        return file.substr( rootPrefix.size() + 1 );
-    }
+    const auto sep = []( char c ) {
+#ifdef _WIN32
+        return c == '/' || c == '\\';
+#else
+        return c == '/';
+#endif
+    };
+    while( rootPrefix.size() > 1 && sep( rootPrefix.back() ) ) rootPrefix.remove_suffix( 1 );
+    bool matches = !rootPrefix.empty() && file.size() > rootPrefix.size();
+    for( std::size_t i = 0; matches && i < rootPrefix.size(); ++i )
+        matches = file[i] == rootPrefix[i] || ( sep( file[i] ) && sep( rootPrefix[i] ) );
+    if( matches && sep( file[rootPrefix.size()] ) ) file.remove_prefix( rootPrefix.size() + 1 );
+    else if( rootPrefix == "/" && !file.empty() && file.front() == '/' ) file.remove_prefix( 1 );
+    while( file.size() >= 2 && file.front() == '.' && sep( file[1] ) ) file.remove_prefix( 2 );
     return file;
 }
 
@@ -142,7 +148,7 @@ inline std::string_view rootRelativeUri( std::string_view file, std::string_view
 // (same normalization ccjson.h's writeCcJson performs on the same input for the same reason).
 inline std::string rootPrefixOf( std::string_view root )
 {
-    std::string prefix( root );
+    std::string prefix = rw::normalizePathForMatch( root );
     while( prefix.size() > 1 && prefix.back() == '/' )
     {
         prefix.pop_back();
