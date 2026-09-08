@@ -3109,19 +3109,16 @@ inline bool filePathContains( std::string_view haystack, std::string_view needle
     {
         return true;
     }
-    if( haystack.find( "/./" ) == std::string_view::npos )
+    if( haystack.find( '\\' ) == std::string_view::npos && needle.find( '\\' ) == std::string_view::npos
+        && haystack.find( "/./" ) == std::string_view::npos && needle.find( "/./" ) == std::string_view::npos
+        && !( haystack.size() >= 2 && haystack.substr( 0, 2 ) == "./" )
+        && !( needle.size() >= 2 && needle.substr( 0, 2 ) == "./" ) )
     {
         return false;
     }
-
-    std::string collapsed;
-    collapsed.reserve( haystack.size() );
-    for( std::size_t i = 0; i < haystack.size(); )
-    {
-        if( haystack.substr( i, 3 ) == "/./" ) { collapsed.push_back( '/' );          i += 3; }
-        else                                   { collapsed.push_back( haystack[i] );  ++i;    }
-    }
-    return collapsed.find( needle ) != std::string::npos;
+    const std::string normalizedHaystack = normalizePathForMatch( haystack );
+    const std::string normalizedNeedle   = normalizePathForMatch( needle );
+    return normalizedHaystack.find( normalizedNeedle ) != std::string::npos;
 }
 
 // shared "name" | "file:name" spec splitter (X9(b)) — the ONE disambiguation rule --around/--lego/

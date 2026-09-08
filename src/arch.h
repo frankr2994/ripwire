@@ -48,6 +48,37 @@
 namespace rw
 {
 
+// Normalize a path supplied by a filesystem or an agent before comparing it with an indexed path.
+// Windows filesystem APIs commonly return '\\', while Git, map selectors, and Ripwire's portable
+// path contracts use '/'. A leading "./" is a root-spelling detail, not part of a selector.
+// This helper deliberately does not resolve '..' or case-fold: those would turn an exact path
+// identity into a guess.
+inline std::string normalizePathForMatch( std::string_view path )
+{
+    std::string out;
+    out.reserve( path.size() );
+    for( const char c : path )
+    {
+        out.push_back( c == '\\' ? '/' : c );
+    }
+    while( out.size() >= 2 && out[0] == '.' && out[1] == '/' )
+    {
+        out.erase( 0, 2 );
+    }
+    for( std::size_t i = 0; i + 2 < out.size(); )
+    {
+        if( out[i] == '/' && out[i + 1] == '.' && out[i + 2] == '/' )
+        {
+            out.erase( i + 1, 2 );
+        }
+        else
+        {
+            ++i;
+        }
+    }
+    return out;
+}
+
 // ── built-in architecture layers (P3): dir-name → layer, so a common repo layout gets a `layer=` tag on its
 //    file nodes (architecture at a glance) WITHOUT the user declaring `layer NAME = …`. Matched against each
 //    DIRECTORY component of the path (the filename segment is ignored), case-insensitive; first table hit

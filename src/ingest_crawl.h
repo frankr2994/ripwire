@@ -963,7 +963,12 @@ GitIgnoreSet collectGitIgnored( const char* rootDir )
 // then counts only the subtrees no rule this build already carried had pruned.
 bool pathInIgnoreSet( const std::vector<std::string>& sorted, std::string_view rel ) noexcept
 {
-    return std::binary_search( sorted.begin(), sorted.end(), rel,
+    std::string normalized = normalizePathForMatch( rel );
+    while( !normalized.empty() && normalized.front() == '/' )
+    {
+        normalized.erase( normalized.begin() );
+    }
+    return std::binary_search( sorted.begin(), sorted.end(), normalized,
                                []( std::string_view a, std::string_view b ) noexcept { return a < b; } );
 }
 

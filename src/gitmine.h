@@ -536,15 +536,7 @@ inline bool hasCombiningMark( std::string_view path ) noexcept
 
 inline std::string normalizeJoinPath( std::string_view path )
 {
-    std::string out;
-    out.reserve( path.size() );
-    for( std::size_t i = 0; i < path.size(); )
-    {
-        if( path.substr( i, 3 ) == "/./" )                      { out.push_back( '/' );      i += 3; continue; }
-        if( out.empty() && path.substr( i, 2 ) == "./" )        {                            i += 2; continue; }
-        out.push_back( path[i] );  ++i;
-    }
-    return out;
+    return normalizePathForMatch( path );
 }
 
 // Run a git command and hand back its stdout LINES with the CR/LF tail stripped and blank lines dropped —
@@ -939,13 +931,14 @@ inline GitPathOffset deriveGitPathOffset( const IngestResult& ing, std::uint32_t
 
         const std::string  gitRelProbe = normalizeJoinPath( absProbe.substr( topSlash.size() ) );
         const std::string& indexProbe  = ing.files[f];
+        const std::string  normalizedIndexProbe = normalizeJoinPath( indexProbe );
 
         // the longest DIRECTORY-ALIGNED tail the two spellings share (longest first: every boundary-aligned
         // start offset of the git spelling, in order)
         for( std::size_t tailStart = 0; ; )
         {
             const std::string_view tail( gitRelProbe.data() + tailStart, gitRelProbe.size() - tailStart );
-            if( isBoundarySuffix( indexProbe, tail ) )
+            if( isBoundarySuffix( normalizedIndexProbe, tail ) )
             {
                 offset.isDerived        = true;
                 offset.indexStripPrefix = indexProbe.substr( 0, indexProbe.size() - tail.size() );
@@ -2067,13 +2060,16 @@ inline std::string churnWindowStamp( std::string_view minedWindow, bool hasChurn
 // resolve a path substring (e.g. "canyon/foo.cpp" or "foo.cpp") to one ingested file id, or UINT32_MAX.
 inline std::uint32_t resolveFileSuffix( const IngestResult& ing, std::string_view sub )
 {
+    const std::string normalizedSub = normalizePathForMatch( sub );
     for( std::uint32_t f = 0; f < ing.files.size(); ++f )
     {
         const std::string& fp = ing.files[f];
-        if( fp.size() >= sub.size() )
+        const std::string normalizedPath = normalizePathForMatch( fp );
+        if( normalizedPath.size() >= normalizedSub.size() )
         {
-            const std::size_t off = fp.size() - sub.size();
-            if( fp.compare( off, sub.size(), sub ) == 0 && ( off == 0 || fp[off - 1] == '/' ) )
+            const std::size_t off = normalizedPath.size() - normalizedSub.size();
+            if( normalizedPath.compare( off, normalizedSub.size(), normalizedSub ) == 0
+                && ( off == 0 || normalizedPath[off - 1] == '/' ) )
             {
                 return f;
             }
