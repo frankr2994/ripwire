@@ -941,8 +941,17 @@ GitIgnoreSet collectGitIgnored( const char* rootDir )
             out.rootIgnored = true;
             return out;
         }
-        if( isDir ) { out.dirs.emplace_back( ent ); }
-        else        { out.files.emplace_back( ent ); }
+        std::string normalized = normalizePathForMatch( ent );
+        while( !normalized.empty() && normalized.front() == '/' )
+        {
+            normalized.erase( normalized.begin() );
+        }
+        if( normalized.empty() )
+        {
+            continue;
+        }
+        if( isDir ) { out.dirs.emplace_back( std::move( normalized ) ); }
+        else        { out.files.emplace_back( std::move( normalized ) ); }
     }
     std::sort( out.dirs.begin(),  out.dirs.end() );
     std::sort( out.files.begin(), out.files.end() );

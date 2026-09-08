@@ -582,34 +582,57 @@ inline std::uint64_t fnv1a64( std::string_view s ) noexcept
 // than an empty one. Empty root ⇒ just the leading-`./`/`/` normalization (equivalent to root ".").
 inline std::string_view relForHash( std::string_view path, std::string_view root ) noexcept
 {
+    const auto isPathSep = []( char c ) noexcept { return c == '/' || c == '\\'; };
     // 1) strip the ingest-root prefix if present (allow one optional trailing '/' on the root).
     std::string_view rootTrim = root;
-    while( rootTrim.size() > 1 && rootTrim.back() == '/' )
+    while( rootTrim.size() > 1 && isPathSep( rootTrim.back() ) )
     {
         rootTrim.remove_suffix( 1 ); // "/abs/repo/" → "/abs/repo"
     }
-    if( !rootTrim.empty() && rootTrim != "." && path.size() >= rootTrim.size()
-        && path.compare( 0, rootTrim.size(), rootTrim ) == 0 )
+    // `std::filesystem::path::string()` may choose a different separator spelling than the argv root on
+    // Windows (for example `C:\\repo\\src` vs `C:/repo/src`).  The two spellings are the same lexical
+    // prefix, and rejecting that prefix leaves an absolute path that cannot match Git's root-relative
+    // ignore entries.  Compare separators as equivalent without allocating so the view-returning helper
+    // keeps its no-I/O/no-storage contract.
+    const auto samePathChar = [ &isPathSep ]( char lhs, char rhs ) noexcept
+    {
+        const bool lhsSep = isPathSep( lhs );
+        const bool rhsSep = isPathSep( rhs );
+        return lhsSep && rhsSep ? true : lhs == rhs;
+    };
+    bool rootMatches = !rootTrim.empty() && rootTrim != "." && path.size() >= rootTrim.size();
+    if( rootMatches )
+    {
+        for( std::size_t i = 0; i < rootTrim.size(); ++i )
+        {
+            if( !samePathChar( path[ i ], rootTrim[ i ] ) )
+            {
+                rootMatches = false;
+                break;
+            }
+        }
+    }
+    if( rootMatches )
     {
         // matched the root; the next char (if any) must be a '/' so we strip whole path components only
         // ("/abs/repo" must not eat the "repo" in "/abs/repository/...").
         std::string_view rest = path.substr( rootTrim.size() );
-        if( rest.empty() || rest.front() == '/' )
+        if( rest.empty() || isPathSep( rest.front() ) )
         {
             path = rest;
         }
     }
 
     // 2) normalize residual leading "./" then leading "/" so "." / "./x" / "/x" all collapse to "x".
-    while( path.size() >= 2 && path[0] == '.' && path[1] == '/' )
+    while( path.size() >= 2 && path[0] == '.' && isPathSep( path[1] ) )
     {
         path.remove_prefix( 2 );
     }
-    while( !path.empty() && path.front() == '/' )
+    while( !path.empty() && isPathSep( path.front() ) )
     {
         path.remove_prefix( 1 );
     }
-    while( path.size() >= 2 && path[0] == '.' && path[1] == '/' )
+    while( path.size() >= 2 && path[0] == '.' && isPathSep( path[1] ) )
     {
         path.remove_prefix( 2 );
     }

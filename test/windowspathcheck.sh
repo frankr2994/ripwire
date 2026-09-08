@@ -49,6 +49,14 @@ printf '%s' "$SKIPPED" | grep -q 'ignored_dirs="1"' \
     && ok "Git-ignore accounting recognizes the ignored directory" \
     || no "Git-ignore accounting did not recognize the ignored directory"
 
+if command -v cygpath >/dev/null 2>&1; then
+    NATIVE_REPO="$(cygpath -w "$REPO")"
+    ABS_SKIPPED="$($BIN "$NATIVE_REPO" --skipped --no-cache 2>/dev/null)"
+    printf '%s' "$ABS_SKIPPED" | grep -q 'ignored_dirs="1"' \
+        && ok "absolute native Windows root preserves Git-ignore accounting" \
+        || no "absolute native Windows root lost Git-ignore accounting ($(printf '%s' "$ABS_SKIPPED" | sed -n 's/.*<skipped/\\<skipped/p' | cut -d '>' -f 1)"
+fi
+
 FORWARD="$(run_repo '--expand=src/demo.ts:rwWindowsPathSymbol' --top-k=0 --no-cache 2>/dev/null)"
 printf '%s' "$FORWARD" | grep -q 'value + 2' \
     && ok "forward-slash qualified selector expands the changed body" \
